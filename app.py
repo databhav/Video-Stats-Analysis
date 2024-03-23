@@ -2,87 +2,231 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 
-st.set_page_config(layout="wide")
-st.sidebar.title("Video Stats Analysis Tool")
-file = st.sidebar.file_uploader('Upload excel file:')
+st.set_page_config(layout='wide')
+st.title("Video Stats Analysis")
+
+st.sidebar.title('Filters')
+file = st.sidebar.file_uploader('Upload Excel File:')
+
 if file:
-  comparison_box = st.sidebar.checkbox('Compare Multiple Videos')
   df = pd.read_excel(file)
+  titles = df['Title'].unique()
+  vs = st.sidebar.multiselect('Select Videos:',options=titles,default=titles)
+  dnf = st.sidebar.checkbox("Show Decline and Flats")
+  dfs = {}  # Dictionary to store the DataFrames
+
+  for title in vs:
+      dfs[title] = df[df['Title'] == title]
+
+  colors = ['#d32f2f', '#2196f3', '#e91e63', '#42a5f5', '#f06292', '#64b5f6', '#f48fb1', '#90caf9', '#ef9a9a', '#1f77b4']
+  opacity_value = 0.8
+  graph_height = 600
+  bar_graph_height = 500
   #df
+  ## USER RETENTION CHART - fig
+  fig = go.Figure()
+
+  for i, (title, df) in enumerate(dfs.items()):
+      # Plot each DataFrame as a line
+      fig.add_trace(go.Scatter(
+        x=df['Video position (%)'],
+        y=df['Retention Start (%)'],
+        mode='lines',
+        name=title,
+        line=dict(color=colors[i])
+        ))
+      if dnf == True:
+        decline_x = df[df['Decline Areas'] == 1]['Video position (%)']
+        decline_y = df[df['Decline Areas'] == 1]['Retention Start (%)']
+        fig.add_trace(go.Scatter(
+            x=decline_x,
+            y=decline_y,
+            mode='markers',
+            marker=dict(color='red', size=6),
+            showlegend=False
+        ))
+        flats_x = df[df['Flat line areas'] == 1]['Video position (%)']
+        flats_y = df[df['Flat line areas'] == 1]['Retention Start (%)']
+        fig.add_trace(go.Scatter(
+            x=flats_x,
+            y=flats_y,
+            mode='markers',
+            marker=dict(color='green', size=6),
+            showlegend=False
+        ))
+  # Set the layout of the figure
+  fig.update_layout(
+    title='Multi-Line Chart',
+    xaxis_title='Video position (%)',
+    yaxis_title='Retention Start (%)',
+    legend=dict(orientation="h", y=-0.55),
+    xaxis_rangeslider_visible=True,
+    height=graph_height)
+
+  ## USER RETENTION CHART by duration - fig11
+  fig11 = go.Figure()
+
+  for i, (title, df) in enumerate(dfs.items()):
+      # Plot each DataFrame as a line
+      fig11.add_trace(go.Scatter(
+        x=df['Video Start'],
+        y=df['Retention Start (%)'],
+        mode='lines',
+        name=title,
+        line=dict(color=colors[i])
+        ))
+
+  # Set the layout of the figure
+  fig11.update_layout(
+    title='Multi-Line Chart',
+    xaxis_title='Video position (%)',
+    yaxis_title='Retention Start (%)',
+    legend=dict(orientation="h", y=-0.55),
+    xaxis_rangeslider_visible=True,
+    height=graph_height)
+
+  ## STACKED GRAPH - fig2
+  fig2 = go.Figure()
+
+  for i, (title, df) in enumerate(dfs.items()):
+      # Plot each DataFrame as a stacked bar
+      fig2.add_trace(go.Bar(
+          x=df['Video position (%)'],
+          y=df['Audience Decline (%)'],
+          name=title,
+          marker=dict(color=colors[i])
+      ))
+
+  # Set the layout of the figure
+  fig2.update_layout(
+      title='Stacked Bar Graph',
+      xaxis_title='Audience Decline (%)',
+      yaxis_title='Video position (%)',
+      barmode='stack',
+      legend=dict(orientation="h", y=-0.55),
+      height=graph_height,
+      xaxis_rangeslider_visible=True
+  )
+
+  ## STACKED GRAPH by duration- fig22
+  fig22 = go.Figure()
+
+  for i, (title, df) in enumerate(dfs.items()):
+      # Plot each DataFrame as a stacked bar
+      fig22.add_trace(go.Bar(
+          x=df['Video Start'],
+          y=df['Audience Decline (%)'],
+          name=title,
+          marker=dict(color=colors[i])
+      ))
+
+  # Set the layout of the figure
+  fig22.update_layout(
+      title='Stacked Bar Graph',
+      xaxis_title='Audience Decline (%)',
+      yaxis_title='Video Start',
+      barmode='stack',
+      legend=dict(orientation="h", y=-0.55),
+      height=graph_height,
+      xaxis_rangeslider_visible=True
+  )
+
+  # first rows dataframe creation
+  # Group the DataFrame by 'Retention 10', 'Retention 30', and 'Rank Retention 30', and then get unique values for each group
+  first_rows_df = pd.DataFrame()
+
+  # Iterate over each DataFrame in the dictionary
+  for title, df in dfs.items():
+      # Extract the first row of the DataFrame
+      first_row = df.head(1)
+      # Append the first row to the DataFrame storing all first rows
+      first_rows_df = pd.concat([first_rows_df, first_row])
+
+  # Reset the index of the DataFrame storing all first rows
+  first_rows_df.reset_index(drop=True, inplace=True)
+  #first_rows_df
+
+  ## FLAT LINE COUNT GRAPH - fig3
+  flat_line_sums = {}
+
+  # Iterate over each DataFrame
+  for title, df in dfs.items():
+      # Calculate the sum of flat line areas for each title
+      flat_line_sum = df['Flat line areas'].sum()
+      # Store the sum in the dictionary
+      flat_line_sums[title] = flat_line_sum
+
+  # Create a DataFrame from the dictionary
+  flat_line_df = pd.DataFrame(list(flat_line_sums.items()), columns=['Title', 'Sum'])
+
+  fig3 = go.Figure()
+  # Add a bar trace
+  fig3.add_trace(go.Bar(
+      x=flat_line_df['Title'],  # X values
+      y=flat_line_df['Sum'],  # Y values
+      name='Flat Line Count',  # Legend label
+      marker=dict(color=colors,opacity=opacity_value)
+  ))
+  fig3.update_layout(
+    title='Flat Line Count Graph',
+    xaxis_title='Title',
+    yaxis_title='Flat Line Count',
+    height=bar_graph_height
+    )
+    
+
+  ## RETENTION 30 BAR GRAPH - fig4
+  fig4 = go.Figure()
+  fig4.add_trace(go.Bar(
+    x=first_rows_df['Title'],
+    y=first_rows_df['Retention 30'],
+    marker=dict(color=colors,opacity=opacity_value)
+  ))
+  fig4.update_layout(
+    title='Retention 30 Bar Graph',
+    xaxis_title='Title',
+    yaxis_title='Retention 30 (%)',
+    height=bar_graph_height
+  )
+
+  ## RETENTION 10 BAR GRAPH - fig5
+  fig5 = go.Figure()
+  fig5.add_trace(go.Bar(
+    x=first_rows_df['Title'],
+    y=first_rows_df['Retention 10'],
+    marker=dict(color=colors,opacity=opacity_value)
+  ))
+  fig5.update_layout(
+    title='Retention 10 Bar Graph',
+    xaxis_title='Title',
+    yaxis_title='Retention 10 (%)',
+    height=bar_graph_height
+  )
+
+
+
   col1, col2 = st.columns((4,2))
-  if comparison_box == False:
-    video_title = st.sidebar.selectbox('Select the Video to see stats for:',df['Title'].unique())
-    df_new=df[df['Title']==video_title]
-    # Convert 'Video Start' column to string format
-    df_new['Video Start'] = df_new['Video Start'].apply(lambda x: x.strftime('%H:%M:%S'))
-    #df_new
-
-    with col1:
-      fig2 = go.Figure()
-      fig2.add_trace(go.Scatter(x=df_new['Video Start'], y=df_new['Retention Start (%)'], fill='tozeroy', name='Retention Start (%)'))
-      # Add shapes for instant declines
-      for i in range(1, len(df_new)):
-        decline = df_new.iloc[i - 1]['Retention Start (%)'] - df_new.iloc[i]['Retention Start (%)']
-        if decline >= 1:
-            fig2.add_shape(type="rect", x0=df_new.iloc[i - 1]['Video Start'], y0=0, x1=df_new.iloc[i]['Video Start'], y1=100, fillcolor="rgb(255, 99, 71)", opacity=0.5, layer="below", line=dict(width=0))
-        if decline <= 0.4:
-            fig2.add_shape(type="rect", x0=df_new.iloc[i - 1]['Video Start'], y0=0, x1=df_new.iloc[i]['Video Start'], y1=100, fillcolor="rgb(144, 238, 144)", opacity=0.5, layer="below", line=dict(width=0))
-
-      fig2.update_xaxes(title_text='Time Stamp')
-      fig2.update_yaxes(title_text='Retention (%)')
+  with col1:
+    col11,col12=st.columns((3,1))
+    with col11:
+      gs1 = st.selectbox('Select Chart',options=['User Retention Chart','Audience Decline Per Position Graph'])
+    with col12:
+      gs12 = st.selectbox('Select By:',options=['By Video Position','By Duration'])
+    if gs1 == 'Audience Decline Per Position Graph' and gs12 == 'By Video Position':
       st.plotly_chart(fig2,use_container_width=True)
-  elif comparison_box==True:
-    video_title_1 = st.sidebar.selectbox('Select the Video 1 to see stats for:',df['Title'].unique())
-    video_title_2 = st.sidebar.selectbox('Select the Video 2 to see stats for:',df['Title'].unique())
-    df1=df[df['Title']==video_title_1]
-    # Convert 'Video Start' column to string format
-    df1['Video Start'] = df1['Video Start'].apply(lambda x: x.strftime('%H:%M:%S'))
-    #df_new
-
-    with col1:
-      fig2 = go.Figure()
-      fig2.add_trace(go.Scatter(x=df1['Video Start'], y=df1['Retention Start (%)'], fill='tozeroy', name='Retention Start (%)'))
-      # Add shapes for instant declines
-      for i in range(1, len(df1)):
-        decline = df1.iloc[i - 1]['Retention Start (%)'] - df1.iloc[i]['Retention Start (%)']
-        if decline >= 1:
-            fig2.add_shape(type="rect", x0=df1.iloc[i - 1]['Video Start'], y0=0, x1=df1.iloc[i]['Video Start'], y1=100, fillcolor="rgb(255, 99, 71)", opacity=0.5, layer="below", line=dict(width=0))
-        if decline <= 0.4:
-            fig2.add_shape(type="rect", x0=df1.iloc[i - 1]['Video Start'], y0=0, x1=df1.iloc[i]['Video Start'], y1=100, fillcolor="rgb(144, 238, 144)", opacity=0.5, layer="below", line=dict(width=0))
-
-      fig2.update_layout(title=f'"{video_title_1}" Retention (%) chart', xaxis_title='Time Stamp', yaxis_title='Retention (%)')
-      st.plotly_chart(fig2,use_container_width=True)
-
-      df2=df[df['Title']==video_title_2]
-      # Convert 'Video Start' column to string format
-      df2['Video Start'] = df2['Video Start'].apply(lambda x: x.strftime('%H:%M:%S'))
-      #df_new
-
-      with col1:
-        fig3 = go.Figure()
-        fig3.add_trace(go.Scatter(x=df2['Video Start'], y=df2['Retention Start (%)'], fill='tozeroy', name='Retention Start (%)'))
-        # Add shapes for instant declines
-        for i in range(1, len(df2)):
-          decline = df2.iloc[i - 1]['Retention Start (%)'] - df2.iloc[i]['Retention Start (%)']
-          if decline >= 1:
-              fig3.add_shape(type="rect", x0=df2.iloc[i - 1]['Video Start'], y0=0, x1=df2.iloc[i]['Video Start'], y1=100, fillcolor="rgb(255, 99, 71)", opacity=0.5, layer="below", line=dict(width=0))
-          if decline <= 0.4:
-              fig3.add_shape(type="rect", x0=df2.iloc[i - 1]['Video Start'], y0=0, x1=df2.iloc[i]['Video Start'], y1=100, fillcolor="rgb(144, 238, 144)", opacity=0.5, layer="below", line=dict(width=0))
-        fig3.update_layout(title=f'"{video_title_2}" Retention (%) chart', xaxis_title='Time Stamp', yaxis_title='Retention (%)')
-        st.plotly_chart(fig3,use_container_width=True)
-
-
-
+    elif gs1 == 'User Retention Chart' and gs12 == 'By Duration':
+      st.plotly_chart(fig11,use_container_width=True)
+    elif gs1 == 'Audience Decline Per Position Graph' and gs12 == 'By Duration':
+      st.plotly_chart(fig22,use_container_width=True)
+    else:
+      st.plotly_chart(fig,use_container_width=True)
   with col2:
-    df_bar = df[df['Retention End (%)'].isna()]
-    df_bar['Retention Lost (%)'] = 100-df_bar['Retention Start (%)']
-
-    fig_double_bar = go.Figure()
-    fig_double_bar.add_trace(go.Bar(x=df_bar['Title'], y=df_bar['Retention Start (%)'], name='Retention (%)',marker_color='rgb(144, 238, 144)',opacity=0.7))
-    fig_double_bar.add_trace(go.Bar(x=df_bar['Title'], y=df_bar['Retention Lost (%)'], name='Churn(%)', marker_color='rgb(255, 99, 71)',opacity=0.7))
-
-    fig_double_bar.update_layout(xaxis_title='Video Title', yaxis_title='Percentage', barmode='group')
-
-    st.plotly_chart(fig_double_bar,use_container_width=True)
+    gs2 = st.selectbox("Choose the graph to visualise:",options=['Retention 10','Retention 30','Flat Line Count'])
+    if gs2 == 'Flat Line Count':# Create an empty dictionary to store the sums for each title
+      st.plotly_chart(fig3, use_container_width=True)
+    elif gs2 == 'Retention 30':
+      st.plotly_chart(fig4,use_container_width=True)
+    else:
+      st.plotly_chart(fig5,use_container_width=True)
 else:
-  st.info('Upload excel file to view stats')
+  st.info("Upload the excel sheet first to continue")
