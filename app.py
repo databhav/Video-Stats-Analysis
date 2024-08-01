@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import datetime
 
 st.set_page_config(layout='wide')
 st.title("Video Stats Analysis")
@@ -10,6 +11,34 @@ file = st.sidebar.file_uploader('Upload Excel File:')
 
 if file:
   df = pd.read_excel(file)
+
+  # Convert 'Video Start' to total seconds
+  #df['Video Start Seconds'] = df['Video Start'].apply(time_to_seconds)
+  # Convert 'Video Start' to seconds if it contains datetime.time objects
+  if isinstance(df['Video Start'].iloc[0], pd.Timestamp):
+      df['Video Start'] = df['Video Start'].dt.total_seconds()
+  elif isinstance(df['Video Start'].iloc[0], datetime.time):
+      df['Video Start'] = df['Video Start'].apply(lambda x: x.hour * 3600 + x.minute * 60 + x.second)
+
+    # Create 'Flat line areas' column if it does not exist
+  if 'Flat line areas' not in df.columns:
+      df['Flat line areas'] = (df['Retention Start (%)'] - df['Retention End (%)']).abs().le(1).astype(int)
+
+  # Identify decline areas where it is not a flat line
+  df['Decline Areas'] = 1 - df['Flat line areas']
+
+  # Add columns for Retention 10 and Retention 30 based on existing retention data
+  df['Retention 10'] = df['Retention Start (%)']
+  df['Retention 30'] = df['Retention End (%)']
+
+  # Assuming `dfs` is a dictionary with dataframes
+  # Extract and plot retention percentages
+  retention_data = []
+
+  # Create 'Video position (%)' if it does not exist
+  if 'Video position (%)' not in df.columns:
+      df['Video position (%)'] = df['Video Start'] / df.groupby('Title')['Video Start'].transform('max') * 100
+
   titles = df['Title'].unique()
   vs = st.sidebar.multiselect('Select Videos:',options=titles,default=titles)
   dnf = st.sidebar.checkbox("Show Decline and Flats")
@@ -174,7 +203,7 @@ if file:
     height=bar_graph_height
     )
     
-
+  
   ## RETENTION 30 BAR GRAPH - fig4
   fig4 = go.Figure()
   fig4.add_trace(go.Bar(
@@ -203,7 +232,7 @@ if file:
     height=bar_graph_height
   )
 
-
+  
 
   col1, col2 = st.columns((4,2))
   with col1:
@@ -229,4 +258,5 @@ if file:
     else:
       st.plotly_chart(fig5,use_container_width=True)
 else:
-  st.info("Upload the excel sheet first to continue")
+  st.info("Upload the excel sheet first to continue and make sure the format of the columns, column names and file is as shown below")
+  st.image("img/ss2.png")
